@@ -20,13 +20,15 @@ class CNN(torch.nn.Module):
         super(CNN, self).__init__()
         
         ### Initialize the various Network Layers
-        self.conv1 = torch.nn.Conv2d(3, 16, stride=4, kernel_size=(9,9)) # 3 input channels, 16 output channels
-        self.batchNorm = torch.nn.BatchNorm2d(16)
+        self.conv1 = torch.nn.Conv2d(3, 10, stride=3, padding = 3, kernel_size=(9,9)) # 3 input channels, 16 output channels
+        self.dropout = torch.nn.Dropout(0.1)
+        self.batchNorm1 = torch.nn.BatchNorm2d(10)
         self.pool1 = torch.nn.MaxPool2d((3,3),stride=3)
         self.relu = torch.nn.ReLU()
-        self.conv2 = torch.nn.Conv2d(16, 16, stride=1, kernel_size=(5,5))
-        self.pool2 = torch.nn.MaxPool2d((5,5),stride=1)
-        self.conv3 = torch.nn.Conv2d(16,num_bins, kernel_size=(5,18))
+        self.conv2 = torch.nn.Conv2d(10, 32, stride=1, kernel_size=(5,5))
+        self.batchNorm2 = torch.nn.BatchNorm2d(32)
+        self.pool2 = torch.nn.MaxPool2d((2,2),stride=2)
+        self.conv3 = torch.nn.Conv2d(32,num_bins, kernel_size=(1,10))
 
         if use_cuda_if_available and torch.cuda.is_available():
             self = self.cuda()
@@ -35,16 +37,19 @@ class CNN(torch.nn.Module):
     def forward(self, x):
         
         x = self.conv1(x)
+        x = self.dropout(x)
+        x = self.batchNorm1(x)
         x = self.pool1(x)
         x = self.relu(x)
-        x = self.batchNorm(x)
 
         x = self.conv2(x)
+        x = self.dropout(x)
+        x = self.batchNorm2(x)
         x = self.pool2(x)
         x = self.relu(x)
-        x = self.batchNorm(x)
 
         x = self.conv3(x)
+        
         x = x.squeeze() # (Batch_size x num_bins x 1 x 1) to (Batch_size x num_bins)
 
         return x
@@ -74,7 +79,7 @@ class dataloader(torch.utils.data.Dataset):
         mean = np.mean(self.data['images'], axis=0)
         normalized_data = self.data['images'] - mean
         return normalized_data
-    
+
     def __len__(self):
         return int(self.images.shape[0])
   
@@ -88,7 +93,7 @@ if __name__ == "__main__":
     '''
     Initialize the Network
     '''
-    binsize=45 #degrees **set this to 20 for part 2**
+    binsize=20 #degrees **set this to 20 for part 2**
     bin_edges = np.arange(-180,180+1,binsize)
     num_bins = bin_edges.shape[0] - 1
     cnn = CNN(num_bins) #Initialize our CNN Class
@@ -97,9 +102,9 @@ if __name__ == "__main__":
     Uncomment section to get a summary of the network (requires torchsummary to be installed):
         to install: pip install torchsummary
     '''
-    # from torchsummary import summary
-    # inputs = torch.zeros((1,3,68,224))
-    # summary(cnn, input_size=(3, 68, 224))
+    #from torchsummary import summary
+    #inputs = torch.zeros((1,3,68,224))
+    #summary(cnn, input_size=(3, 68, 224))
     
     '''
     Training procedure
@@ -107,7 +112,7 @@ if __name__ == "__main__":
     
     CE_loss = torch.nn.CrossEntropyLoss(reduction='sum') #initialize our loss (specifying that the output as a sum of all sample losses)
     params = list(cnn.parameters())
-    optimizer = torch.optim.Adam(params, lr=1e-2, weight_decay=0.0) #initialize our optimizer (Adam, an alternative to stochastic gradient descent)
+    optimizer = torch.optim.Adam(params, lr=1e-3, weight_decay=0.0) #initialize our optimizer (Adam, an alternative to stochastic gradient descent)
     
     ### Initialize our dataloader for the training and validation set (specifying minibatch size of 128)
     dsets = {x: dataloader('sun-cnn_{}.mat'.format(x),binsize=binsize) for x in ['train', 'val']} 
@@ -119,7 +124,7 @@ if __name__ == "__main__":
     best_err = 1
     
     ### Iterate through the data for the desired number of epochs
-    for epoch in range(0,30):
+    for epoch in range(0,25):
         for mode in ['train', 'val']:    #iterate 
             epoch_loss=0
             top1_incorrect = 0
